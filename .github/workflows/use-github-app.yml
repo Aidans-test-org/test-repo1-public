@@ -1,0 +1,13 @@
+name: Checkout Private Repo
+
+on:
+  workflow_dispatch:
+
+jobs:
+  checkout-private-repo:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout test-repo2-private
+        uses: actions/checkout@v4
+        with:
+          repository: Aidan-test-org/test-repo2-private
