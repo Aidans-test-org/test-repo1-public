@@ -20,7 +20,7 @@ jobs:
 
       - name: Write GitHub App key
         run: |
-          printf '%s\n' "${{ secrets.GH_APP_PRIVATE_KEY }}" > app.pem
+          echo "${{ secrets.GH_APP_PRIVATE_KEY }}" > app.pem
           chmod 600 app.pem
 
       - name: Generate App JWT
@@ -44,15 +44,22 @@ jobs:
       - name: Exchange JWT for Installation Token
         id: token
         run: |
+          echo "APP_JWT is set: $([ -n "$APP_JWT" ] && echo "YES" || echo "NO")"
+          echo "Install ID: ${{ vars.GH_INSTALL_ID }}"
+          
           resp=$(curl -s -X POST \
             -H "Authorization: Bearer $APP_JWT" \
             -H "Accept: application/vnd.github+json" \
             https://api.github.com/app/installations/${{ vars.GH_INSTALL_ID }}/access_tokens)
 
+          echo "Response: $resp"
+          
           token=$(python -c "import sys,json; print(json.load(sys.stdin)['token'])" <<<"$resp")
 
           echo "::add-mask::$token"
           echo "INSTALL_TOKEN=$token" >> $GITHUB_ENV
+        env:
+          APP_JWT: ${{ env.APP_JWT }}
 
       - name: Checkout private repo 
         uses: actions/checkout@v4
