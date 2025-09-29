@@ -14,4 +14,4 @@ jobs:
       - name: Checkout test-repo2-private
         uses: actions/checkout@v4
         with:
-          repository: Aidan-test-org/test-repo2-private
+          repository: Aidans-test-org/test-repo2-private
