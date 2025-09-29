@@ -5,7 +5,7 @@ on:
 
   push:
     paths:
-      - .github/workflows/use-github-app.yml
+      - .github/workflows/clone-test-repo-2-private.yml
 
 jobs:
   checkout-private-repo:

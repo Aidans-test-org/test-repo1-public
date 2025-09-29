@@ -1,0 +1,17 @@
+name: Checkout Public Repo
+
+on:
+  workflow_dispatch:
+
+  push:
+    paths:
+      - .github/workflows/clone-test-repo3-public.yml
+
+jobs:
+  checkout-public-repo:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout test-repo3-public
+        uses: actions/checkout@v4
+        with:
+          repository: Aidan-test-org/test-repo3-public
