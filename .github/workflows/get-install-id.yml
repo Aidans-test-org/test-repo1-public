@@ -1,0 +1,35 @@
+name: Get Install ID
+on: workflow_dispatch
+
+jobs:
+  get-id:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install deps
+        run: pip install PyJWT cryptography requests
+
+      - name: Get installation ID
+        env:
+          GH_APP_ID: ${{ secrets.GH_APP_ID }}
+          GH_APP_PRIVATE_KEY: ${{ secrets.GH_APP_PRIVATE_KEY }}
+        run: |
+          python - <<'PY'
+          import os, time, jwt, requests
+          app_id = int(os.environ['GH_APP_ID'])
+          private_key = os.environ['GH_APP_PRIVATE_KEY'].encode()
+          now = int(time.time())
+          payload = {"iat": now, "exp": now + 540, "iss": app_id}
+          token = jwt.encode(payload, private_key, algorithm="RS256")
+          r = requests.get(
+              "https://api.github.com/app/installations",
+              headers={"Authorization": f"Bearer {token}",
+                       "Accept": "application/vnd.github+json"}
+          )
+          r.raise_for_status()
+          print(r.json())
+          PY
