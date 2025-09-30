@@ -20,8 +20,10 @@ jobs:
 
       - name: Write GitHub App key
         run: |
-          printf '%s' "${{ secrets.GH_APP_PRIVATE_KEY }}" > app.pem 2>/dev/null
-          chmod 600 app.pem 2>/dev/null
+          echo "$PRIVATE_KEY" > app.pem
+          chmod 600 app.pem
+        env:
+          PRIVATE_KEY: ${{ secrets.GH_APP_PRIVATE_KEY }}
 
       - name: Generate App JWT
         id: jwt
