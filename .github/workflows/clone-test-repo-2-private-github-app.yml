@@ -2,6 +2,14 @@ name: Checkout Private Repo via GitHub App
 
 on:
   workflow_dispatch:
+  push:
+    branches: [ 'main' ]
+    # Only runs AFTER PR is merged by trusted maintainer
+  # SECURITY NOTES:
+  # - pull_request: SAFE - forks cannot access secrets
+  # - pull_request_target: DANGEROUS - has access to secrets!
+  # - push: SAFE if you review PRs before merging
+  # - workflow_dispatch: SAFE - requires manual approval
 
 permissions:
   contents: read
@@ -59,20 +67,98 @@ jobs:
         env:
           APP_JWT: ${{ env.APP_JWT }}
 
-      - name: Checkout private repo 
+      - name: Checkout private repo (Method 1 - actions/checkout)
         uses: actions/checkout@v4
         with:
           repository: Aidans-test-org/test-repo2-private
           token: ${{ env.INSTALL_TOKEN }}
-          path: private-repo
+          path: private-repo-method1
           persist-credentials: false
 
-      - name: Verify checkout
+      - name: Verify Method 1
         run: |
-          if [ -d "private-repo" ]; then
-            echo "Private repository checked out successfully"
-            exit 0
+          if [ -d "private-repo-method1" ]; then
+            echo "Method 1 (actions/checkout): Success"
           else
-            echo "Private repository checkout failed"
+            echo "Method 1 (actions/checkout): Failed"
             exit 1
           fi
+
+      - name: Clone private repo (Method 2 - git clone in script)
+        run: |
+          # Clone with token (temporarily includes credentials)
+          git clone https://x-access-token:${INSTALL_TOKEN}@github.com/Aidans-test-org/test-repo2-private.git temp-clone 2>/dev/null
+          
+          # Copy files WITHOUT .git directory (removes all git credentials)
+          cp -r temp-clone private-repo-method2
+          rm -rf private-repo-method2/.git
+          
+          # Clean up temp clone
+          rm -rf temp-clone
+        env:
+          INSTALL_TOKEN: ${{ env.INSTALL_TOKEN }}
+
+      - name: Verify Method 2
+        run: |
+          if [ -d "private-repo-method2" ]; then
+            echo "Method 2 (git clone): Success"
+          else
+            echo "Method 2 (git clone): Failed"
+            exit 1
+          fi
+
+      - name: Clone private repo (Method 3 - shallow clone, no git history)
+        run: |
+          # Shallow clone (faster, only latest commit, no history)
+          git clone --depth 1 https://x-access-token:${INSTALL_TOKEN}@github.com/Aidans-test-org/test-repo2-private.git private-repo-method3 2>/dev/null
+          
+          # Remove .git directory entirely (zero traces of credentials)
+          rm -rf private-repo-method3/.git
+        env:
+          INSTALL_TOKEN: ${{ env.INSTALL_TOKEN }}
+
+      - name: Verify Method 3
+        run: |
+          if [ -d "private-repo-method3" ]; then
+            echo "Method 3 (shallow clone): Success"
+          else
+            echo "Method 3 (shallow clone): Failed"
+            exit 1
+          fi
+
+      - name: Checkout public repo (to get our scripts)
+        uses: actions/checkout@v4
+        with:
+          path: public-repo
+
+      - name: Clone private repo (Method 4 - external script with secret)
+        run: |
+          chmod +x public-repo/test-method4.sh
+          public-repo/test-method4.sh
+        env:
+          INSTALL_TOKEN: ${{ env.INSTALL_TOKEN }}
+
+      - name: Verify Method 4
+        run: |
+          if [ -d "private-repo-method4" ]; then
+            echo "Method 4 (script-based clone): Success"
+          else
+            echo "Method 4 (script-based clone): Failed"
+            exit 1
+          fi
+
+      - name: Compare all methods
+        run: |
+          echo "All methods completed successfully!"
+          echo ""
+          echo "Method 1 (actions/checkout): private-repo-method1/"
+          echo "  → Best for: Standard workflows, most secure"
+          echo ""
+          echo "Method 2 (git clone + copy): private-repo-method2/"
+          echo "  → Best for: When you need flexibility"
+          echo ""
+          echo "Method 3 (shallow + rm .git): private-repo-method3/"
+          echo "  → Best for: Just files, fastest, zero git traces"
+          echo ""
+          echo "Method 4 (external script): private-repo-method4/"
+          echo "  → Best for: Complex logic, reusable scripts, team workflows"
