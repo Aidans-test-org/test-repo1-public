@@ -16,24 +16,26 @@ jobs:
           python-version: '3.11'
 
       - name: Install PyJWT
-        run: pip install -q PyJWT cryptography
+        run: pip install -q PyJWT cryptography > /dev/null 2>&1
 
       - name: Write GitHub App key
         run: |
-          printf '%s' "${{ secrets.GH_APP_PRIVATE_KEY }}" > app.pem
-          chmod 600 app.pem
+          printf '%s' "${{ secrets.GH_APP_PRIVATE_KEY }}" > app.pem 2>/dev/null
+          chmod 600 app.pem 2>/dev/null
 
       - name: Generate App JWT
         id: jwt
         run: |
-          python - <<'PY'
-          import os, time, jwt
+          python - <<'PY' 2>/dev/null
+          import os, time, jwt, sys
+          sys.stdout = open(os.devnull, 'w')
           app_id = int(os.environ['GH_APP_ID'])
           with open("app.pem","rb") as f:
               key = f.read()
           now = int(time.time())
           payload = {"iat": now, "exp": now+540, "iss": app_id}
           token = jwt.encode(payload, key, algorithm="RS256")
+          sys.stdout = sys.__stdout__
           print(f"::add-mask::{token}")
           with open(os.environ["GITHUB_ENV"],"a") as fh:
               fh.write(f"APP_JWT={token}\n")
@@ -47,11 +49,11 @@ jobs:
           resp=$(curl -s -X POST \
             -H "Authorization: Bearer $APP_JWT" \
             -H "Accept: application/vnd.github+json" \
-            https://api.github.com/app/installations/${{ vars.GH_INSTALL_ID }}/access_tokens)
+            https://api.github.com/app/installations/${{ vars.GH_INSTALL_ID }}/access_tokens 2>/dev/null)
           
-          token=$(python -c "import sys,json; print(json.load(sys.stdin)['token'])" <<<"$resp")
-          echo "::add-mask::$token"
-          echo "INSTALL_TOKEN=$token" >> $GITHUB_ENV
+          token=$(python -c "import sys,json; print(json.load(sys.stdin)['token'])" <<<"$resp" 2>/dev/null)
+          echo "::add-mask::$token" 2>/dev/null
+          echo "INSTALL_TOKEN=$token" >> $GITHUB_ENV 2>/dev/null
         env:
           APP_JWT: ${{ env.APP_JWT }}
 
@@ -64,4 +66,11 @@ jobs:
           persist-credentials: false
 
       - name: Verify checkout
-        run: echo "Private repository checked out successfully"
+        run: |
+          if [ -d "private-repo" ]; then
+            echo "Private repository checked out successfully"
+            exit 0
+          else
+            echo "Private repository checkout failed"
+            exit 1
+          fi
