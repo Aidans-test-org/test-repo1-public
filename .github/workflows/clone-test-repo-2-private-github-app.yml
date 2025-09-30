@@ -43,7 +43,7 @@ jobs:
               fh.write(f"APP_JWT={token}\n")
           PY
         env:
-          GH_APP_ID: ${{ vars.GH_APP_ID }}
+          GH_APP_ID: ${{ secrets.GH_APP_ID }}
 
       - name: Exchange JWT for Installation Token
         id: token
@@ -51,7 +51,7 @@ jobs:
           resp=$(curl -s -X POST \
             -H "Authorization: Bearer $APP_JWT" \
             -H "Accept: application/vnd.github+json" \
-            https://api.github.com/app/installations/${{ vars.GH_INSTALL_ID }}/access_tokens 2>/dev/null)
+            https://api.github.com/app/installations/${{ secrets.GH_INSTALL_ID }}/access_tokens 2>/dev/null)
           
           token=$(python -c "import sys,json; print(json.load(sys.stdin)['token'])" <<<"$resp" 2>/dev/null)
           echo "::add-mask::$token" 2>/dev/null
