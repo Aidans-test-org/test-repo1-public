@@ -18,6 +18,14 @@ jobs:
   trigger-private:
     runs-on: ubuntu-latest
     steps:
+      - name: List available workflows
+        run: |
+          echo "Checking available workflows in private repo..."
+          curl -s \
+            -H "Authorization: token ${{ secrets.PRIVATE_REPO_PAT }}" \
+            -H "Accept: application/vnd.github+json" \
+            https://api.github.com/repos/Aidans-test-org/test-repo4-private-testing/actions/workflows | jq '.workflows[] | {id, name, path}'
+
       - name: Trigger workflow in private repo
         run: |
           workflow_file="clone-test-repo2-private.yml"
