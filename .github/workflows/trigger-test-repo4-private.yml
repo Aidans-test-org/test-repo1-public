@@ -1,13 +1,58 @@
-name: Run private workflow via public workflow
+name: Trigger Private Workflow
 
 on:
-  pull_request:
   push:
     branches: [ main ]
+  pull_request:
 
 jobs:
-  run-private-workflow:
-    uses: Aidans-test-org/test-repo4-private-testing/.github/workflows/clone-test-repo2-private.yml@main
-    with:
-      example: "Hello from public repo"
-    secrets: inherit
+  trigger-private:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Generate JWT for GitHub App
+        id: jwt
+        run: |
+          APP_ID=${{ secrets.GH_APP_ID }}
+          PRIVATE_KEY=${{ secrets.GH_APP_PRIVATE_KEY }}
+
+          # Write private key to file
+          echo "$PRIVATE_KEY" > key.pem
+
+          # Generate JWT valid for 9 minutes
+          JWT=$(jq -n --arg time "$(date +%s)" --arg app "$APP_ID" '
+            ($time | tonumber) as $t
+            | {
+                iat: $t,
+                exp: ($t + 540),
+                iss: ($app | tonumber)
+              }
+          ' | openssl dgst -sha256 -sign key.pem | openssl base64 -A | tr -d '\n' | sed 's/+/-/g; s/\//_/g; s/=//g')
+
+          HEADER=$(echo -n '{"alg":"RS256","typ":"JWT"}' | openssl base64 -A | tr -d '\n' | sed 's/+/-/g; s/\//_/g; s/=//g')
+          PAYLOAD=$(jq -n --arg time "$(date +%s)" --arg app "$APP_ID" \
+            '{iat: ($time | tonumber), exp: (($time | tonumber) + 540), iss: ($app | tonumber)}' \
+            | openssl base64 -A | tr -d '\n' | sed 's/+/-/g; s/\//_/g; s/=//g')
+          SIGNATURE=$(echo -n "$HEADER.$PAYLOAD" | openssl dgst -sha256 -sign key.pem | openssl base64 -A | tr -d '\n' | sed 's/+/-/g; s/\//_/g; s/=//g')
+
+          echo "token=$HEADER.$PAYLOAD.$SIGNATURE" >> $GITHUB_OUTPUT
+
+      - name: Exchange JWT for installation token
+        id: token
+        run: |
+          INSTALL_ID=${{ secrets.GH_INSTALL_ID }}
+          JWT=${{ steps.jwt.outputs.token }}
+
+          INSTALL_TOKEN=$(curl -s -X POST \
+            -H "Authorization: Bearer $JWT" \
+            -H "Accept: application/vnd.github+json" \
+            https://api.github.com/app/installations/$INSTALL_ID/access_tokens | jq -r .token)
+
+          echo "token=$INSTALL_TOKEN" >> $GITHUB_OUTPUT
+
+      - name: Trigger workflow in private repo
+        run: |
+          curl -X POST \
+            -H "Authorization: Bearer ${{ steps.token.outputs.token }}" \
+            -H "Accept: application/vnd.github+json" \
+            https://api.github.com/repos/Aidans-test-org/test-repo4-private-testing/.github/workflows/clone-test-repo2-private.yml/dispatches \
+            -d '{"ref":"main","inputs":{"trigger_source":"public-repo"}}'
