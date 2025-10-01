@@ -69,8 +69,10 @@ jobs:
 
       - name: Trigger workflow in private repo
         run: |
+          workflow_file="clone-test-repo2-private.yml"
+          
           curl -X POST \
             -H "Authorization: Bearer ${{ env.INSTALL_TOKEN }}" \
             -H "Accept: application/vnd.github+json" \
-            https://api.github.com/repos/Aidans-test-org/test-repo4-private-testing/.github/workflows/clone-test-repo2-private.yml/dispatches \
-            -d '{"ref":"main","inputs":{"trigger_source":"public-repo"}}'
+            https://api.github.com/repos/Aidans-test-org/test-repo4-private-testing/actions/workflows/${workflow_file}/dispatches \
+            -d '{"ref":"main"}'
