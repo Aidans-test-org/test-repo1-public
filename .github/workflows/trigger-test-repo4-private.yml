@@ -18,61 +18,12 @@ jobs:
   trigger-private:
     runs-on: ubuntu-latest
     steps:
-      - name: Setup Python (for JWT)
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.11'
-
-      - name: Install PyJWT
-        run: pip install -q PyJWT cryptography > /dev/null 2>&1
-
-      - name: Write GitHub App key
-        run: |
-          echo "$PRIVATE_KEY" > app.pem
-          chmod 600 app.pem
-        env:
-          PRIVATE_KEY: ${{ secrets.GH_APP_PRIVATE_KEY }}
-
-      - name: Generate App JWT
-        id: jwt
-        run: |
-          python - <<'PY' 2>/dev/null
-          import os, time, jwt, sys
-          sys.stdout = open(os.devnull, 'w')
-          app_id = int(os.environ['GH_APP_ID'])
-          with open("app.pem","rb") as f:
-              key = f.read()
-          now = int(time.time())
-          payload = {"iat": now, "exp": now+540, "iss": app_id}
-          token = jwt.encode(payload, key, algorithm="RS256")
-          sys.stdout = sys.__stdout__
-          print(f"::add-mask::{token}")
-          with open(os.environ["GITHUB_ENV"],"a") as fh:
-              fh.write(f"APP_JWT={token}\n")
-          PY
-        env:
-          GH_APP_ID: ${{ secrets.GH_APP_ID }}
-
-      - name: Exchange JWT for Installation Token
-        id: token
-        run: |
-          resp=$(curl -s -X POST \
-            -H "Authorization: Bearer $APP_JWT" \
-            -H "Accept: application/vnd.github+json" \
-            https://api.github.com/app/installations/${{ secrets.GH_INSTALL_ID }}/access_tokens 2>/dev/null)
-          
-          token=$(python -c "import sys,json; print(json.load(sys.stdin)['token'])" <<<"$resp" 2>/dev/null)
-          echo "::add-mask::$token" 2>/dev/null
-          echo "INSTALL_TOKEN=$token" >> $GITHUB_ENV 2>/dev/null
-        env:
-          APP_JWT: ${{ env.APP_JWT }}
-
       - name: Trigger workflow in private repo
         run: |
           workflow_file="clone-test-repo2-private.yml"
           
           curl -X POST \
-            -H "Authorization: Bearer ${{ env.INSTALL_TOKEN }}" \
+            -H "Authorization: token ${{ secrets.PRIVATE_REPO_PAT }}" \
             -H "Accept: application/vnd.github+json" \
             https://api.github.com/repos/Aidans-test-org/test-repo4-private-testing/actions/workflows/${workflow_file}/dispatches \
             -d '{"ref":"main"}'
