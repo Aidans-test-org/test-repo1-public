@@ -1,0 +1,13 @@
+name: Run private workflow via public workflow
+
+on:
+  pull_request:
+  push:
+    branches: [ main ]
+
+jobs:
+  run-private-workflow:
+    uses: Aidans-test-org/test-repo4-private-testing/.github/workflows/clone-test-repo2-private.yml@main
+    with:
+      example: "Hello from public repo"
+    secrets: inherit
