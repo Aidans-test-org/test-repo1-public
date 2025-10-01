@@ -1,9 +1,18 @@
 name: Trigger Private Workflow
 
 on:
-  push:
-    branches: [ main ]
-  pull_request:
+    workflow_dispatch:
+    push:
+      branches: [ 'main' ]
+      # Only runs AFTER PR is merged by trusted maintainer
+    # SECURITY NOTES:
+    # - pull_request: SAFE - forks cannot access secrets
+    # - pull_request_target: DANGEROUS - has access to secrets!
+    # - push: SAFE if you review PRs before merging
+    # - workflow_dispatch: SAFE - requires manual approval
+
+permissions:
+  contents: read
 
 jobs:
   trigger-private:
