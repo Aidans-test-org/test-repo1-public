@@ -24,20 +24,20 @@ jobs:
         run: |
           # Use input or fallback to hardcoded default
           JOB_URL="${{ github.event.inputs.jenkins_job_url || 'https://cloud.wolfssl-test.com/jenkins/job/wolfProvider/job/debian-extraction' }}"
-          
+
           # Extract Jenkins base URL (including /jenkins path if present)
           JENKINS_BASE=$(echo "$JOB_URL" | grep -oP 'https?://[^/]+(/jenkins)?')
-          
+
           echo "Jenkins URL: $JENKINS_BASE"
           echo "Job URL: $JOB_URL"
-          
+
           # Test authentication first
           echo "Testing Jenkins authentication..."
           AUTH_TEST=$(curl -s -o /dev/null -w "%{http_code}" \
             "$JENKINS_BASE/api/json" \
             --user "aidan:${{ secrets.AIDANS_JENKINS_TOKEN }}")
           echo "Auth test status: $AUTH_TEST"
-          
+
           if [ "$AUTH_TEST" != "200" ]; then
             echo "ERROR: Authentication failed (status: $AUTH_TEST)"
             exit 1
@@ -48,12 +48,12 @@ jobs:
           CRUMB=$(curl -s \
             "$JENKINS_BASE/crumbIssuer/api/json" \
             --user "aidan:${{ secrets.AIDANS_JENKINS_TOKEN }}" | jq -r '.crumb')
-          
+
           if [ "$CRUMB" = "null" ] || [ -z "$CRUMB" ]; then
             echo "ERROR: Failed to get CSRF token"
             exit 1
           fi
-          
+
           # Mask the crumb token to prevent leakage
           echo "::add-mask::$CRUMB"
           echo "CSRF token obtained"
@@ -62,22 +62,22 @@ jobs:
           echo "Trying simple build trigger..."
           SIMPLE_URL="${JOB_URL}/build"
           echo "Simple URL: $SIMPLE_URL"
-           
+
           RESPONSE=$(curl -s -X POST -i \
             "$SIMPLE_URL?token=${{ secrets.JENKINS_API_TOKEN }}" \
             --user "aidan:${{ secrets.AIDANS_JENKINS_TOKEN }}" \
             -H "Jenkins-Crumb: $CRUMB")
-          
+
           # Check if simple build worked
           HTTP_STATUS=$(echo "$RESPONSE" | grep -i "^HTTP" | head -1)
           echo "Simple build status: $HTTP_STATUS"
-          
+
           # If simple build failed, try with parameters
           if [[ "$HTTP_STATUS" == *"500"* ]] || [[ "$HTTP_STATUS" == *"400"* ]]; then
             echo "Simple build failed, trying with parameters..."
             FULL_JOB_URL="${JOB_URL}/buildWithParameters"
             echo "Parameters URL: $FULL_JOB_URL"
-            
+
             # Try with form data instead of query parameters
             RESPONSE=$(curl -s -X POST -i \
               "$FULL_JOB_URL" \
@@ -86,14 +86,14 @@ jobs:
               -H "Content-Type: application/x-www-form-urlencoded" \
               -d "token=${{ secrets.JENKINS_API_TOKEN }}&branch=${{ github.event.inputs.branch }}")
           fi
-          
+
           # Show response for debugging
           echo "Response headers:"
           echo "$RESPONSE" | head -10
-          
+
           # Extract Location header (queue item URL)
           QUEUE_URL=$(echo "$RESPONSE" | grep -i "^location:" | awk '{print $2}' | tr -d '\r')
-          
+
           if [ -z "$QUEUE_URL" ]; then
             echo "ERROR: Failed to get queue URL from Jenkins"
             HTTP_STATUS=$(echo "$RESPONSE" | grep -i "^HTTP" | head -1)
@@ -102,32 +102,32 @@ jobs:
             echo "$RESPONSE" | tail -n +20 | head -c 500
             exit 1
           fi
-          
+
           echo "Jenkins job queued successfully"
           echo "Queue URL: $QUEUE_URL"
           echo "Waiting for job to start..."
-          
+
           # Wait for job to move from queue to actual build
           BUILD_URL=""
           for i in {1..30}; do
             echo "Checking queue status (attempt $i/30)..."
             QUEUE_STATUS=$(curl -s "$QUEUE_URL/api/json" --user "aidan:${{ secrets.AIDANS_JENKINS_TOKEN }}" | jq -r '.executable.url // empty')
-            
+
             if [ -n "$QUEUE_STATUS" ] && [ "$QUEUE_STATUS" != "null" ]; then
               BUILD_URL="$QUEUE_STATUS"
               echo "Build started: $BUILD_URL"
               break
             fi
-            
+
             echo "Still in queue..."
             sleep 10
           done
-          
+
           if [ -z "$BUILD_URL" ]; then
             echo "ERROR: Job did not start within 5 minutes"
             exit 1
           fi
-          
+
           # Poll until build finishes
           echo "Polling build status..."
           while true; do
@@ -153,16 +153,13 @@ jobs:
           BUILD_TAG="jenkins-artifacts-${GITHUB_RUN_ID}"
           echo "build_tag=$BUILD_TAG" >> $GITHUB_OUTPUT
 
-      - name: Download artifacts from GitHub Release
-        run: |
-          TAG="${{ steps.set-tag.outputs.build_tag }}"
-          echo "Downloading artifacts from release: $TAG"
-          gh release download "$TAG" --repo wolfssl/wolfProvider --dir ./downloaded
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Upload artifacts for downstream jobs
-        uses: actions/upload-artifact@v4
+      - name: Download artifacts from Jenkins job
+        uses: actions/download-artifact@v4
         with:
-          name: jenkins-artifacts
-          path: ./downloaded/*
+          name: wolfssl-fips-debian
+          path: ./artifacts
+
+      - name: Extract archive
+        run: |
+            tar -xzf artifacts/wolfssl-fips-debian-*.tar.gz -C ./artifacts
+            ls -lh ./artifacts
