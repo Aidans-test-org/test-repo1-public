@@ -6,9 +6,10 @@ on:
       branch:
         description: "Branch to build"
         default: "main"
-      jenkins_job:
-        description: "Jenkins job name"
-        default: "wolfProvider/job/debian-extraction"
+      jenkins_job_url:
+        description: "Full Jenkins job URL"
+        default: "https://cloud.wolfssl-test.com/jenkins/job/wolfProvider/job/debian-extraction"
+        required: true
   push:
     branches: [ "main" ]   # optional auto-run on push to main
 
@@ -21,25 +22,33 @@ jobs:
       - name: Trigger Jenkins build
         id: trigger
         run: |
-          JENKINS_URL="https://cloud.wolfssl-test.com"
-          JOB_NAME="${{ github.event.inputs.jenkins_job || 'wolfProvider/job/debian-extraction' }}"
-          echo "Triggering Jenkins job: $JOB_NAME"
+          JOB_URL="${{ github.event.inputs.jenkins_job_url }}"
+          
+          # Extract Jenkins base URL for auth test
+          JENKINS_BASE=$(echo "$JOB_URL" | grep -oP 'https?://[^/]+')
+          
+          echo "Jenkins URL: $JENKINS_BASE"
+          echo "Job URL: $JOB_URL"
           
           # Test authentication first
           echo "Testing Jenkins authentication..."
           AUTH_TEST=$(curl -s -o /dev/null -w "%{http_code}" \
-            "$JENKINS_URL/api/json" \
+            "$JENKINS_BASE/api/json" \
             --user "jenkins-bot:${{ secrets.WOLFSSL_BOT_TOKEN }}")
           echo "Auth test status: $AUTH_TEST"
           
           if [ "$AUTH_TEST" != "200" ]; then
             echo "ERROR: Authentication failed (status: $AUTH_TEST)"
+            echo "Please verify:"
+            echo "  1. Jenkins URL is correct: $JENKINS_BASE"
+            echo "  2. Username 'jenkins-bot' exists"
+            echo "  3. WOLFSSL_BOT_TOKEN is correct"
             exit 1
           fi
 
-          # Build the full job URL
-          FULL_JOB_URL="$JENKINS_URL/job/$JOB_NAME/buildWithParameters"
-          echo "Job URL: $FULL_JOB_URL"
+          # Build the trigger URL
+          FULL_JOB_URL="${JOB_URL}/buildWithParameters"
+          echo "Triggering: $FULL_JOB_URL"
           
           # Trigger Jenkins job and capture response
           RESPONSE=$(curl -s -X POST -i \
