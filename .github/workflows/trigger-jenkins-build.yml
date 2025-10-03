@@ -35,7 +35,7 @@ jobs:
           echo "Testing Jenkins authentication..."
           AUTH_TEST=$(curl -s -o /dev/null -w "%{http_code}" \
             "$JENKINS_BASE/api/json" \
-            --user "wolfssl-bot:${{ secrets.JENKINS_API_TOKEN }}")
+            --user "jenkins-bot:${{ secrets.WOLFSSL_BOT_TOKEN }}")
           echo "Auth test status: $AUTH_TEST"
           
           if [ "$AUTH_TEST" != "200" ]; then
@@ -49,8 +49,8 @@ jobs:
           
           # Trigger Jenkins job and capture response
           RESPONSE=$(curl -s -X POST -i \
-            "$FULL_JOB_URL?token=${{ secrets.JENKINS_API_TOKEN }}&branch=${{ github.event.inputs.branch }}" \
-            --user "jenkins-bot:${{ secrets.JENKINS_API_TOKEN }}")
+            "$FULL_JOB_URL?token=${{ secrets.WOLFSSL_BOT_TOKEN }}&branch=${{ github.event.inputs.branch }}" \
+            --user "jenkins-bot:${{ secrets.WOLFSSL_BOT_TOKEN }}")
           
           # Extract Location header (don't print full response - may contain sensitive data)
           BUILD_URL=$(echo "$RESPONSE" | grep -i "^location:" | awk '{print $2}' | tr -d '\r')
@@ -68,7 +68,7 @@ jobs:
 
           # Poll until build finishes
           while true; do
-            STATUS=$(curl -s "$BUILD_URL/api/json" --user "jenkins-bot:${{ secrets.JENKINS_API_TOKEN }}" | jq -r '.result')
+            STATUS=$(curl -s "$BUILD_URL/api/json" --user "jenkins-bot:${{ secrets.WOLFSSL_BOT_TOKEN }}" | jq -r '.result')
             if [[ "$STATUS" == "SUCCESS" ]]; then
               echo "Jenkins build succeeded."
               break
