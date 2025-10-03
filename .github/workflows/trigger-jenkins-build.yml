@@ -22,7 +22,8 @@ jobs:
       - name: Trigger Jenkins build
         id: trigger
         run: |
-          JOB_URL="${{ github.event.inputs.jenkins_job_url }}"
+          # Use input or fallback to hardcoded default
+          JOB_URL="${{ github.event.inputs.jenkins_job_url || 'https://cloud.wolfssl-test.com/jenkins/job/wolfProvider/job/debian-extraction' }}"
           
           # Extract Jenkins base URL for auth test
           JENKINS_BASE=$(echo "$JOB_URL" | grep -oP 'https?://[^/]+')
