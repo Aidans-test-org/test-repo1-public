@@ -58,16 +58,34 @@ jobs:
           echo "::add-mask::$CRUMB"
           echo "CSRF token obtained"
 
-          # Build the trigger URL
-          FULL_JOB_URL="${JOB_URL}/buildWithParameters"
-          echo "Triggering: $FULL_JOB_URL"
+          # Try simple build first (without parameters)
+          echo "Trying simple build trigger..."
+          SIMPLE_URL="${JOB_URL}/build"
+          echo "Simple URL: $SIMPLE_URL"
            
-          # Trigger Jenkins job and capture response
-          echo "Full trigger URL: $FULL_JOB_URL?token=***&branch=${{ github.event.inputs.branch }}"
           RESPONSE=$(curl -s -X POST -i \
-            "$FULL_JOB_URL?token=${{ secrets.JENKINS_API_TOKEN }}&branch=${{ github.event.inputs.branch }}" \
+            "$SIMPLE_URL?token=${{ secrets.JENKINS_API_TOKEN }}" \
             --user "aidan:${{ secrets.AIDANS_JENKINS_TOKEN }}" \
             -H "Jenkins-Crumb: $CRUMB")
+          
+          # Check if simple build worked
+          HTTP_STATUS=$(echo "$RESPONSE" | grep -i "^HTTP" | head -1)
+          echo "Simple build status: $HTTP_STATUS"
+          
+          # If simple build failed, try with parameters
+          if [[ "$HTTP_STATUS" == *"500"* ]] || [[ "$HTTP_STATUS" == *"400"* ]]; then
+            echo "Simple build failed, trying with parameters..."
+            FULL_JOB_URL="${JOB_URL}/buildWithParameters"
+            echo "Parameters URL: $FULL_JOB_URL"
+            
+            # Try with form data instead of query parameters
+            RESPONSE=$(curl -s -X POST -i \
+              "$FULL_JOB_URL" \
+              --user "aidan:${{ secrets.AIDANS_JENKINS_TOKEN }}" \
+              -H "Jenkins-Crumb: $CRUMB" \
+              -H "Content-Type: application/x-www-form-urlencoded" \
+              -d "token=${{ secrets.JENKINS_API_TOKEN }}&branch=${{ github.event.inputs.branch }}")
+          fi
           
           # Show response for debugging
           echo "Response headers:"
