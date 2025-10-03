@@ -25,11 +25,22 @@ jobs:
           JOB_NAME="${{ github.event.inputs.jenkins_job || 'wolfProvider/job/debian-extraction' }}"
           echo "Triggering Jenkins job: $JOB_NAME"
 
-          # Trigger Jenkins job
-          BUILD_URL=$(curl -s -X POST \
+          # Trigger Jenkins job and capture response
+          RESPONSE=$(curl -s -X POST -i \
             "$JENKINS_URL/job/$JOB_NAME/buildWithParameters?token=${{ secrets.WOLFSSL_BOT_TOKEN }}&branch=${{ github.event.inputs.branch }}" \
-            --user "jenkins-bot:${{ secrets.WOLFSSL_BOT_TOKEN }}" -i | grep -i location | awk '{print $2}' | tr -d '\r')
-
+            --user "jenkins-bot:${{ secrets.WOLFSSL_BOT_TOKEN }}")
+          
+          # Extract Location header (don't print full response - may contain sensitive data)
+          BUILD_URL=$(echo "$RESPONSE" | grep -i "^location:" | awk '{print $2}' | tr -d '\r')
+          
+          if [ -z "$BUILD_URL" ]; then
+            echo "ERROR: Failed to get build URL from Jenkins"
+            HTTP_STATUS=$(echo "$RESPONSE" | grep -i "^HTTP" | head -1)
+            echo "HTTP Status: $HTTP_STATUS"
+            exit 1
+          fi
+          
+          echo "Jenkins job triggered successfully"
           echo "Waiting for Jenkins to queue job..."
           sleep 10
 
