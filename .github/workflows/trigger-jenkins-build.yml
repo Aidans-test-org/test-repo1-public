@@ -43,6 +43,21 @@ jobs:
             exit 1
           fi
 
+          # Get CSRF token (crumb) first
+          echo "Getting CSRF token..."
+          CRUMB=$(curl -s \
+            "$JENKINS_BASE/crumbIssuer/api/json" \
+            --user "aidan:${{ secrets.AIDANS_JENKINS_TOKEN }}" | jq -r '.crumb')
+          
+          if [ "$CRUMB" = "null" ] || [ -z "$CRUMB" ]; then
+            echo "ERROR: Failed to get CSRF token"
+            exit 1
+          fi
+          
+          # Mask the crumb token to prevent leakage
+          echo "::add-mask::$CRUMB"
+          echo "CSRF token obtained"
+
           # Build the trigger URL
           FULL_JOB_URL="${JOB_URL}/buildWithParameters"
           echo "Triggering: $FULL_JOB_URL"
@@ -51,7 +66,8 @@ jobs:
           echo "Full trigger URL: $FULL_JOB_URL?token=***&branch=${{ github.event.inputs.branch }}"
           RESPONSE=$(curl -s -X POST -i \
             "$FULL_JOB_URL?token=${{ secrets.JENKINS_API_TOKEN }}&branch=${{ github.event.inputs.branch }}" \
-            --user "aidan:${{ secrets.AIDANS_JENKINS_TOKEN }}")
+            --user "aidan:${{ secrets.AIDANS_JENKINS_TOKEN }}" \
+            -H "Jenkins-Crumb: $CRUMB")
           
           # Show response for debugging
           echo "Response headers:"
