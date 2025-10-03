@@ -24,10 +24,26 @@ jobs:
           JENKINS_URL="https://cloud.wolfssl-test.com"
           JOB_NAME="${{ github.event.inputs.jenkins_job || 'wolfProvider/job/debian-extraction' }}"
           echo "Triggering Jenkins job: $JOB_NAME"
+          
+          # Test authentication first
+          echo "Testing Jenkins authentication..."
+          AUTH_TEST=$(curl -s -o /dev/null -w "%{http_code}" \
+            "$JENKINS_URL/api/json" \
+            --user "jenkins-bot:${{ secrets.WOLFSSL_BOT_TOKEN }}")
+          echo "Auth test status: $AUTH_TEST"
+          
+          if [ "$AUTH_TEST" != "200" ]; then
+            echo "ERROR: Authentication failed (status: $AUTH_TEST)"
+            exit 1
+          fi
 
+          # Build the full job URL
+          FULL_JOB_URL="$JENKINS_URL/job/$JOB_NAME/buildWithParameters"
+          echo "Job URL: $FULL_JOB_URL"
+          
           # Trigger Jenkins job and capture response
           RESPONSE=$(curl -s -X POST -i \
-            "$JENKINS_URL/job/$JOB_NAME/buildWithParameters?token=${{ secrets.WOLFSSL_BOT_TOKEN }}&branch=${{ github.event.inputs.branch }}" \
+            "$FULL_JOB_URL?token=${{ secrets.WOLFSSL_BOT_TOKEN }}&branch=${{ github.event.inputs.branch }}" \
             --user "jenkins-bot:${{ secrets.WOLFSSL_BOT_TOKEN }}")
           
           # Extract Location header (don't print full response - may contain sensitive data)
