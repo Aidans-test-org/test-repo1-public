@@ -35,15 +35,11 @@ jobs:
           echo "Testing Jenkins authentication..."
           AUTH_TEST=$(curl -s -o /dev/null -w "%{http_code}" \
             "$JENKINS_BASE/api/json" \
-            --user "jenkins-bot:${{ secrets.JENKINS_API_TOKEN }}")
+            --user "wolfssl-bot:${{ secrets.JENKINS_API_TOKEN }}")
           echo "Auth test status: $AUTH_TEST"
           
           if [ "$AUTH_TEST" != "200" ]; then
             echo "ERROR: Authentication failed (status: $AUTH_TEST)"
-            echo "Please verify:"
-            echo "  1. Jenkins URL is correct: $JENKINS_BASE"
-            echo "  2. Username 'jenkins-bot' exists"
-            echo "  3. JENKINS_API_TOKEN is correct"
             exit 1
           fi
 
