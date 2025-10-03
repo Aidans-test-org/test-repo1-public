@@ -91,11 +91,11 @@ jobs:
           echo "Response headers:"
           echo "$RESPONSE" | head -10
           
-          # Extract Location header (don't print full response - may contain sensitive data)
-          BUILD_URL=$(echo "$RESPONSE" | grep -i "^location:" | awk '{print $2}' | tr -d '\r')
+          # Extract Location header (queue item URL)
+          QUEUE_URL=$(echo "$RESPONSE" | grep -i "^location:" | awk '{print $2}' | tr -d '\r')
           
-          if [ -z "$BUILD_URL" ]; then
-            echo "ERROR: Failed to get build URL from Jenkins"
+          if [ -z "$QUEUE_URL" ]; then
+            echo "ERROR: Failed to get queue URL from Jenkins"
             HTTP_STATUS=$(echo "$RESPONSE" | grep -i "^HTTP" | head -1)
             echo "HTTP Status: $HTTP_STATUS"
             echo "Response body (first 500 chars):"
@@ -103,11 +103,33 @@ jobs:
             exit 1
           fi
           
-          echo "Jenkins job triggered successfully"
-          echo "Waiting for Jenkins to queue job..."
-          sleep 10
-
+          echo "Jenkins job queued successfully"
+          echo "Queue URL: $QUEUE_URL"
+          echo "Waiting for job to start..."
+          
+          # Wait for job to move from queue to actual build
+          BUILD_URL=""
+          for i in {1..30}; do
+            echo "Checking queue status (attempt $i/30)..."
+            QUEUE_STATUS=$(curl -s "$QUEUE_URL/api/json" --user "aidan:${{ secrets.AIDANS_JENKINS_TOKEN }}" | jq -r '.executable.url // empty')
+            
+            if [ -n "$QUEUE_STATUS" ] && [ "$QUEUE_STATUS" != "null" ]; then
+              BUILD_URL="$QUEUE_STATUS"
+              echo "Build started: $BUILD_URL"
+              break
+            fi
+            
+            echo "Still in queue..."
+            sleep 10
+          done
+          
+          if [ -z "$BUILD_URL" ]; then
+            echo "ERROR: Job did not start within 5 minutes"
+            exit 1
+          fi
+          
           # Poll until build finishes
+          echo "Polling build status..."
           while true; do
             STATUS=$(curl -s "$BUILD_URL/api/json" --user "aidan:${{ secrets.AIDANS_JENKINS_TOKEN }}" | jq -r '.result')
             if [[ "$STATUS" == "SUCCESS" ]]; then
