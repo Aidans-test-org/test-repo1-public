@@ -35,7 +35,7 @@ jobs:
           echo "Testing Jenkins authentication..."
           AUTH_TEST=$(curl -s -o /dev/null -w "%{http_code}" \
             "$JENKINS_BASE/api/json" \
-            --user "jenkins-bot:${{ secrets.WOLFSSL_BOT_TOKEN }}")
+            --user "wolfssl-bot:${{ secrets.WOLFSSL_BOT_TOKEN }}")
           echo "Auth test status: $AUTH_TEST"
           
           if [ "$AUTH_TEST" != "200" ]; then
