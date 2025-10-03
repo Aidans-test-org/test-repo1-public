@@ -134,6 +134,7 @@ jobs:
             STATUS=$(curl -s "$BUILD_URL/api/json" --user "aidan:${{ secrets.AIDANS_JENKINS_TOKEN }}" | jq -r '.result')
             if [[ "$STATUS" == "SUCCESS" ]]; then
               echo "Jenkins build succeeded."
+              echo "build_url=$BUILD_URL" >> $GITHUB_OUTPUT
               break
             elif [[ "$STATUS" == "FAILURE" ]]; then
               echo "Jenkins build failed!"
@@ -153,13 +154,50 @@ jobs:
           BUILD_TAG="jenkins-artifacts-${GITHUB_RUN_ID}"
           echo "build_tag=$BUILD_TAG" >> $GITHUB_OUTPUT
 
-      - name: Download artifacts from Jenkins job
-        uses: actions/download-artifact@v4
-        with:
-          name: wolfssl-fips-debian
-          path: ./artifacts
+      - name: Download artifacts from Jenkins
+        run: |
+          echo "Downloading artifacts from Jenkins build..."
+          
+          # Get the build artifacts list
+          ARTIFACTS_URL="${{ steps.trigger.outputs.build_url }}/api/json"
+          echo "Artifacts API URL: $ARTIFACTS_URL"
+          
+          # Get artifacts list
+          ARTIFACTS_JSON=$(curl -s "$ARTIFACTS_URL" --user "aidan:${{ secrets.AIDANS_JENKINS_TOKEN }}" | jq '.artifacts')
+          echo "Available artifacts:"
+          echo "$ARTIFACTS_JSON" | jq '.[] | {fileName, relativePath}'
+          
+          # Find the tar.gz file
+          ARCHIVE_FILE=$(echo "$ARTIFACTS_JSON" | jq -r '.[] | select(.fileName | endswith(".tar.gz")) | .fileName' | head -1)
+          
+          if [ -z "$ARCHIVE_FILE" ] || [ "$ARCHIVE_FILE" = "null" ]; then
+            echo "ERROR: No tar.gz archive found in Jenkins artifacts"
+            echo "Available files:"
+            echo "$ARTIFACTS_JSON" | jq -r '.[] | .fileName'
+            exit 1
+          fi
+          
+          echo "Found archive: $ARCHIVE_FILE"
+          
+          # Download the archive
+          DOWNLOAD_URL="${{ steps.trigger.outputs.build_url }}/artifact/$ARCHIVE_FILE"
+          echo "Downloading from: $DOWNLOAD_URL"
+          
+          mkdir -p ./artifacts
+          curl -s -L "$DOWNLOAD_URL" --user "aidan:${{ secrets.AIDANS_JENKINS_TOKEN }}" -o "./artifacts/$ARCHIVE_FILE"
+          
+          if [ $? -eq 0 ]; then
+            echo "Download successful"
+            ls -lh ./artifacts/
+          else
+            echo "Download failed"
+            exit 1
+          fi
 
       - name: Extract archive
         run: |
-            tar -xzf artifacts/wolfssl-fips-debian-*.tar.gz -C ./artifacts
-            ls -lh ./artifacts
+          echo "Extracting archive..."
+          cd ./artifacts
+          tar -xzf *.tar.gz
+          echo "Extracted contents:"
+          ls -lh
