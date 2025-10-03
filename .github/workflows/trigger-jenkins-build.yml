@@ -1,0 +1,72 @@
+name: Trigger Jenkins & Collect Artifacts
+
+on:
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: "Branch to build"
+        default: "main"
+      jenkins_job:
+        description: "Jenkins job name"
+        default: "wolfProvider/job/debian-extraction"
+  push:
+    branches: [ "main" ]   # optional auto-run on push to main
+
+jobs:
+  trigger-jenkins:
+    runs-on: ubuntu-latest
+    outputs:
+      build_tag: ${{ steps.set-tag.outputs.build_tag }}
+    steps:
+      - name: Trigger Jenkins build
+        id: trigger
+        run: |
+          JENKINS_URL="https://cloud.wolfssl-test.com"
+          JOB_NAME="${{ github.event.inputs.jenkins_job || 'wolfProvider/job/debian-extraction' }}"
+          echo "Triggering Jenkins job: $JOB_NAME"
+
+          # Trigger Jenkins job
+          BUILD_URL=$(curl -s -X POST \
+            "$JENKINS_URL/job/$JOB_NAME/buildWithParameters?token=${{ secrets.WOLFSSL_BOT_TOKEN }}&branch=${{ github.event.inputs.branch }}" \
+            --user "jenkins-bot:${{ secrets.WOLFSSL_BOT_TOKEN }}" -i | grep -i location | awk '{print $2}' | tr -d '\r')
+
+          echo "Waiting for Jenkins to queue job..."
+          sleep 10
+
+          # Poll until build finishes
+          while true; do
+            STATUS=$(curl -s "$BUILD_URL/api/json" --user "jenkins-bot:${{ secrets.WOLFSSL_BOT_TOKEN }}" | jq -r '.result')
+            if [[ "$STATUS" == "SUCCESS" ]]; then
+              echo "Jenkins build succeeded."
+              break
+            elif [[ "$STATUS" == "FAILURE" ]]; then
+              echo "Jenkins build failed!"
+              exit 1
+            elif [[ "$STATUS" == "null" ]]; then
+              echo "Build still running..."
+              sleep 20
+            else
+              echo "Unknown status: $STATUS"
+              sleep 10
+            fi
+          done
+
+      - name: Determine Jenkins tag
+        id: set-tag
+        run: |
+          BUILD_TAG="jenkins-artifacts-${GITHUB_RUN_ID}"
+          echo "build_tag=$BUILD_TAG" >> $GITHUB_OUTPUT
+
+      - name: Download artifacts from GitHub Release
+        run: |
+          TAG="${{ steps.set-tag.outputs.build_tag }}"
+          echo "Downloading artifacts from release: $TAG"
+          gh release download "$TAG" --repo wolfssl/wolfProvider --dir ./downloaded
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload artifacts for downstream jobs
+        uses: actions/upload-artifact@v4
+        with:
+          name: jenkins-artifacts
+          path: ./downloaded/*
