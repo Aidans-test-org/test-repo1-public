@@ -1,0 +1,39 @@
+name: Build All wolfProvider Configurations
+on:
+  schedule:
+    # Run at 4AM UTC daily - after Jenkins nightly build (2AM) and regular nightly (3AM)
+    - cron: "0 4 * * *"
+  workflow_dispatch:
+    inputs:
+      wolfssl_ref:
+        description: 'wolfSSL ref (tag/branch)'
+        required: false
+        default: 'v5.8.2-stable'
+        type: string
+      openssl_ref:
+        description: 'OpenSSL ref (tag/branch)'
+        required: false
+        default: 'openssl-3.5.2'
+        type: string
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build_all_configs:
+    name: Build wolfProvider (FIPS=${{ matrix.fips_ref }}, Replace=${{ matrix.replace_default }})
+    uses: ./.github/workflows/build-wolfprovider-test.yml
+    strategy:
+      fail-fast: false
+      matrix:
+        # Build all combinations of FIPS and replace_default
+        fips_ref: ['FIPS', 'non-FIPS']
+        replace_default: [true, false]
+    with:
+      wolfssl_ref: ${{ github.event.inputs.wolfssl_ref || 'v5.8.2-stable' }}
+      openssl_ref: ${{ github.event.inputs.openssl_ref || 'openssl-3.5.2' }}
+      fips_ref: ${{ matrix.fips_ref }}
+      replace_default: ${{ matrix.replace_default }}
+    secrets: inherit
+
