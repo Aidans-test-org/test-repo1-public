@@ -29,12 +29,12 @@ on:
       replace_default:
         description: 'Replace Default Type'
         required: false
-        default: 'both'
+        default: 'true'
         type: choice
         options:
           - 'both'
-          - 'true' # default
-          - 'false' # Currently we dont support debian buiilds without replace-default
+          - 'true'
+          - 'false' # Currently we dont support debian builds without replace-default
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -45,6 +45,7 @@ jobs:
     name: Build wolfProvider
     uses: ./.github/workflows/build-wolfprovider-test.yml
     strategy:
+      fail-fast: false # Continue other builds even if some fail
       matrix:
         # When manually triggered with 'both', or on schedule, build both FIPS and non-FIPS
         # When manually triggered with specific type, only build that type
